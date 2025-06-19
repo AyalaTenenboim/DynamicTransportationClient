@@ -1,0 +1,104 @@
+/* HomeCSS.css */
+
+.home-container {
+    height: 100vh;
+    width: 100%;
+    position: relative;
+    background-image: url('/public/Img/home2.jpg'); /* החלף עם הנתיב לתמונה שלך */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* יישר את התוכן לצד שמאל */
+    padding: 0 80px; /* מרווח מהצדדים */
+}
+
+.overlay {
+    background: rgba(0, 0, 0, 0.4); /* שכבה שקופה כהה מעל התמונה */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 80px;
+}
+
+.text-side {
+    text-align: left; /* יישור טקסט לשמאל */
+    color: white;
+    z-index: 1;
+    max-width: 400px;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.1); /* רקע שקוף קל */
+    border-radius: 15px;
+    backdrop-filter: blur(10px); /* אפקט טשטוש */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.heading {
+    font-size: 3.5rem;
+    font-weight: bold;
+    margin-bottom: 30px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.join-button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    text-decoration: none;
+}
+
+.join-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.join-button:active {
+    transform: translateY(0);
+}
+
+/* עבור מסכים קטנים */
+@media (max-width: 768px) {
+    .home-container {
+        padding: 0 20px;
+    }
+    
+    .overlay {
+        padding: 0 20px;
+        justify-content: center;
+    }
+    
+    .text-side {
+        text-align: center;
+        max-width: 300px;
+        padding: 30px 20px;
+    }
+    
+    .heading {
+        font-size: 2.5rem;
+        margin-bottom: 20px;
+    }
+    
+    .join-button {
+        padding: 12px 30px;
+        font-size: 1rem;
+    }
+}
