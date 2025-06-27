@@ -21,9 +21,12 @@ export default function NewTravelRequest() {
     const [tRequest, setTRequest] = useState({
         startingAddress: '',
         destinationAddress: '',
-        date: new Date().toISOString().split('T')[0],
+        // date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('sv-SE'),
         startTime: '',
-        endTime: ''
+        endTime: '',
+        openOrClosed: 'open',
+        numPassengers: 1
     });
 
     const [mapMarkers, setMapMarkers] = useState({
@@ -33,27 +36,50 @@ export default function NewTravelRequest() {
 
     const [selectedLocation, setSelectedLocation] = useState(null);
     const [selectedAddress, setSelectedAddress] = useState('');
-    
+
     // מצב לניהול המסלול
     const [directionsResponse, setDirectionsResponse] = useState(null);
     const [routeInfo, setRouteInfo] = useState(null);
-    
+
     // מצב להצגת הודעת הצלחה
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: 'AIzaSyBVnoMkXIgkd9G_Vq6fjnxPofbhARoj6qM',
+        googleMapsApiKey: 'AIzaSyAW6Dws3FyOYcgy02d1Gf3MCVijZMc9oWw',
         language: 'he',
         region: 'IL'
     });
+
+    const extractCityFromAddress = (address) => {
+        if (!address) return null;
+
+        // פיצול הכתובת לפי פסיקים
+        const parts = address.split(',').map(part => part.trim());
+
+        if (parts.length >= 2) {
+            return parts[parts.length - 2];
+        }
+
+        return null;
+    };
+
+    const areSameCity = (address1, address2) => {
+        const city1 = extractCityFromAddress(address1);
+        const city2 = extractCityFromAddress(address2);
+
+        if (!city1 || !city2) return false;
+
+        // השוואה ללא רגישות לאותיות גדולות/קטנות
+        return city1.toLowerCase() === city2.toLowerCase();
+    };
 
     // פונקציה לחישוב המסלול
     const calculateRoute = useCallback((startAddress, endAddress) => {
         if (!window.google || !startAddress || !endAddress) return;
 
         const directionsService = new window.google.maps.DirectionsService();
-        
+
         directionsService.route({
             origin: startAddress,
             destination: endAddress,
@@ -63,7 +89,7 @@ export default function NewTravelRequest() {
         }, (result, status) => {
             if (status === 'OK') {
                 setDirectionsResponse(result);
-                
+
                 // שמירת מידע על המסלול
                 const route = result.routes[0];
                 const leg = route.legs[0];
@@ -106,7 +132,7 @@ export default function NewTravelRequest() {
     // פונקציה להצגת סמנים במפה בלבד (לא נשמר בטופס)
     const geocodeAddressForDisplay = (address, type) => {
         if (!window.google) return;
-        
+
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ address: address }, (results, status) => {
             if (status === 'OK' && results[0]) {
@@ -128,9 +154,9 @@ export default function NewTravelRequest() {
             lat: event.latLng.lat(),
             lng: event.latLng.lng()
         };
-        
+
         setSelectedLocation(clickedLocation);
-        
+
         // המרת קואורדינטות לכתובת
         const geocoder = new window.google.maps.Geocoder();
         const latlng = { lat: clickedLocation.lat, lng: clickedLocation.lng };
@@ -150,17 +176,17 @@ export default function NewTravelRequest() {
             ...prev,
             startingAddress: selectedAddress
         }));
-        
+
         setMapMarkers(prev => ({
             ...prev,
             start: selectedLocation
         }));
-        
+
         // חישוב מסלול אם יש כתובת יעד
         if (tRequest.destinationAddress) {
             calculateRoute(selectedAddress, tRequest.destinationAddress);
         }
-        
+
         setSelectedLocation(null);
         setSelectedAddress('');
     };
@@ -171,17 +197,17 @@ export default function NewTravelRequest() {
             ...prev,
             destinationAddress: selectedAddress
         }));
-        
+
         setMapMarkers(prev => ({
             ...prev,
             end: selectedLocation
         }));
-        
+
         // חישוב מסלול אם יש כתובת מוצא
         if (tRequest.startingAddress) {
             calculateRoute(tRequest.startingAddress, selectedAddress);
         }
-        
+
         setSelectedLocation(null);
         setSelectedAddress('');
     };
@@ -200,24 +226,50 @@ export default function NewTravelRequest() {
             return;
         }
 
-        // אם אין שעת יציאה או הגעה, יש להציג התראה
+        // *** בדיקה חדשה - אם המוצא והיעד באותה עיר ***
+        if (!areSameCity(tRequest.startingAddress, tRequest.destinationAddress)) {
+            const startCity = extractCityFromAddress(tRequest.startingAddress);
+            const endCity = extractCityFromAddress(tRequest.destinationAddress);
+            alert(`נקודת המוצא והיעד חייבות להיות באותה עיר.\nמוצא: ${startCity || 'לא זוהה'}\nיעד: ${endCity || 'לא זוהה'}`);
+            return;
+        }
+
+        // אם אין שעת יציאה או הגעה  
         if (!tRequest.startTime && !tRequest.endTime) {
             alert("חובה להקליד שעת יציאה או שעת הגעה.");
             return;
         }
+        // אם הכניס גם שעת יציאה וגם שעת הגעה
+        if (tRequest.startTime && tRequest.endTime) {
+            alert("יש להכניס או שעת יציאה או שעת הגעה");
+            setTRequest(prev => ({
+                ...prev, startTime: '', endTime: ''
+            }));
+            return;
+        }
 
         try {
-            await axios.post("http://localhost:5238/api/TravelRequests/", {
+            const response = await axios.post("http://localhost:5238/api/TravelRequests/", {
                 passengerId: parseInt(passengerId),
                 startingAddress: tRequest.startingAddress,
                 destinationAddress: tRequest.destinationAddress,
                 date: tRequest.date,
                 startTime: tRequest.startTime || "00:00:00",
                 endTime: tRequest.endTime || "00:00:00",
-                openOrClosed: "open"
+                openOrClosed: "open",
+                numPassengers: tRequest.numPassengers || 1
             });
 
             setShowSuccessMessage(true);
+            // שליפת המערך הקיים (אם קיים)
+            const existing = localStorage.getItem('travelRequestIds');
+            const travelRequestsIds = existing ? JSON.parse(existing) : [];
+
+            travelRequestsIds.push(response.data.travelRequestsId);
+
+            localStorage.setItem('travelRequestIds', JSON.stringify(travelRequestsIds));
+
+            // localStorage.setItem('travelRequestIds', response.data.travelRequestsId);
         } catch (error) {
             console.error("שגיאה בשליחת הבקשה:", error);
             alert("אירעה שגיאה בשליחת הבקשה.");
@@ -244,7 +296,7 @@ export default function NewTravelRequest() {
                                     בעוד מספר דקות תוכל/י לצפות בפרטי הנסיעה
                                 </p>
                             </div>
-                            <button 
+                            <button
                                 onClick={handleClick}
                                 className="btn btn-primary btn-lg px-5"
                                 style={{ fontSize: '1.1rem' }}
@@ -267,7 +319,7 @@ export default function NewTravelRequest() {
                     <form onSubmit={handleSubmit} className="bg-light p-4 rounded shadow">
                         <h4 className="mb-4 text-center">בקשה לנסיעה חדשה</h4>
 
-                        <div className="mb-3">
+                        {/* <div className="mb-3">
                             <label className="form-label">כתובת מוצא:</label>
                             <input
                                 type="text"
@@ -278,36 +330,36 @@ export default function NewTravelRequest() {
                                 placeholder="הזן כתובת או בחר במפה"
                                 required
                             />
+                        </div> */}
+                        <div className="mb-3">
+                            <label className="form-label">כתובת מוצא:</label>
+                            <div className="form-control" style={{ backgroundColor: "#f8f9fa", cursor: "not-allowed" }}>
+                                {tRequest.startingAddress || "בחר מיקום במפה"}
+                            </div>
                         </div>
 
                         <div className="mb-3">
                             <label className="form-label">כתובת יעד:</label>
-                            <input
-                                type="text"
-                                name="destinationAddress"
-                                value={tRequest.destinationAddress}
-                                onChange={handleChange}
-                                className="form-control"
-                                placeholder="הזן כתובת או בחר במפה"
-                                required
-                            />
-                        </div>
-
-                        {/* מידע על המסלול */}
-                        {/* {routeInfo && (
-                            <div className="alert alert-info mb-3">
-                                <h6 className="alert-heading">פרטי המסלול:</h6>
-                                <p className="mb-1"><strong>מרחק:</strong> {routeInfo.distance}</p>
-                                <p className="mb-0"><strong>זמן נסיעה:</strong> {routeInfo.duration}</p>
+                            <div className="form-control" style={{ backgroundColor: "#f8f9fa", cursor: "not-allowed" }}>
+                                {tRequest.destinationAddress || "בחר מיקום במפה"}
                             </div>
-                        )} */}
+                        </div>
 
                         <div className="mb-3">
                             <label className="form-label">תאריך נסיעה:</label>
+                            <div className="form-control" style={{ backgroundColor: "#f8f9fa", cursor: "not-allowed" }}>
+                                {new Date(tRequest.date).toLocaleDateString('he-IL')}
+                            </div>
+                        </div>
+
+
+                        <div className="mb-3">
+                            <label className="form-label">מספר נוסעים:</label>
                             <input
-                                type="date"
-                                name="date"
-                                value={tRequest.date}
+                                type="number"
+                                name="numPassengers"
+                                min="1"
+                                value={tRequest.numPassengers}
                                 onChange={handleChange}
                                 className="form-control"
                                 required
@@ -380,7 +432,7 @@ export default function NewTravelRequest() {
                                                 title="נקודת מוצא"
                                             />
                                         )}
-                                        
+
                                         {/* סמן נקודת יעד */}
                                         {mapMarkers.end && (
                                             <Marker
@@ -434,13 +486,13 @@ export default function NewTravelRequest() {
                                 )}
                             </GoogleMap>
                         ) : (
-                            <div className="d-flex justify-content-center align-items-center" style={{height: '500px'}}>
+                            <div className="d-flex justify-content-center align-items-center" style={{ height: '500px' }}>
                                 <div className="spinner-border" role="status">
                                     <span className="visually-hidden">טוען...</span>
                                 </div>
                             </div>
                         )}
-                        
+
                         {/* מקרא */}
                         <div className="mt-2 text-center">
                             <small className="text-muted">

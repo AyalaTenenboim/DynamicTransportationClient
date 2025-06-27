@@ -42,7 +42,7 @@ export default function ShowRoutes() {
 
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: 'AIzaSyBVnoMkXIgkd9G_Vq6fjnxPofbhARoj6qM',
+        googleMapsApiKey: 'AIzaSyAW6Dws3FyOYcgy02d1Gf3MCVijZMc9oWw',
         language: 'he',
         region: 'IL'
     });
@@ -206,9 +206,10 @@ export default function ShowRoutes() {
                     }
                 }
 
-                setStations(stationsWithCoordinates);
-                console.log(`נטענו ${stationsWithCoordinates.length} תחנות עם קואורדינטות`);
-                return stationsWithCoordinates;
+                const mergedStations = mergeIdenticalStations(stationsWithCoordinates);
+                setStations(mergedStations);
+                console.log(`נטענו ${mergedStations.length} תחנות מוזגות עם קואורדינטות`);
+                return mergedStations;
             } else {
                 setStations([]);
                 console.warn('לא נמצאו תחנות עבור המסלול');
@@ -269,7 +270,11 @@ export default function ShowRoutes() {
             // שלב 1: שלוף את התחנות של המסלול
             const stationsResponse = await axios.get(`http://localhost:5238/api/StationInRoute/routeId?routeId=${routeId}`);
             console.log('תחנות במסלול:', stationsResponse.data);
-
+            if (!stationsResponse.data || stationsResponse.data.length === 0) {
+                await axios.delete(`http://localhost:5238/api/Route/routeId?routeId=${routeId}`)
+                console.warn('לא נמצאו תחנות במסלול, מוחק את המסלול');
+                return;
+            }
             const stations = stationsResponse.data;
 
             // שלב 2: יצירת מערך לאחסון תחנות עם פרטי הנוסעים
@@ -349,48 +354,6 @@ export default function ShowRoutes() {
         }
     }, []);
 
-    // // פונקציה נוספת לקבלת נוסעים לפי תחנה ספציפית
-    // const getPassengersByStation = useCallback((stationInRouteId) => {
-    //     if (!stationsWithPassengers || stationsWithPassengers.length === 0) {
-    //         return [];
-    //     }
-
-    //     const station = stationsWithPassengers.find(s => s.stationInRouteId === stationInRouteId);
-    //     return station ? station.passengers : [];
-    // }, [stationsWithPassengers]);
-
-    // פונקציה לקבלת סטטיסטיקות
-    // const getRouteStatistics = useCallback(() => {
-    //     if (!stationsWithPassengers || stationsWithPassengers.length === 0) {
-    //         return {
-    //             totalStations: 0,
-    //             totalPassengers: 0,
-    //             pickupPassengers: 0,
-    //             dropoffPassengers: 0,
-    //             stationsWithPassengers: 0
-    //         };
-    //     }
-    //     const totalStations = stationsWithPassengers.length;
-    //     const stationsWithPassengersCount = stationsWithPassengers.filter(s => s.passengers.length > 0).length;
-
-    //     let totalPassengers = 0;
-    //     let pickupPassengers = 0;
-    //     let dropoffPassengers = 0;
-
-    //     stationsWithPassengers.forEach(station => {
-    //         totalPassengers += station.passengers.length;
-    //         pickupPassengers += station.passengers.filter(p => p.requestType === 'pickup').length;
-    //         dropoffPassengers += station.passengers.filter(p => p.requestType === 'dropoff').length;
-    //     });
-
-    //     return {
-    //         totalStations,
-    //         totalPassengers,
-    //         pickupPassengers,
-    //         dropoffPassengers,
-    //         stationsWithPassengers: stationsWithPassengersCount
-    //     };
-    // }, [stationsWithPassengers]);
 
     // טיפול בצפייה בנוסעים - מעודכן
     const handleShowPassengers = async (route) => {
@@ -419,22 +382,6 @@ export default function ShowRoutes() {
     // חישוב מרכז התחנות - מעודכן
     const getStationsCenter = useCallback(() => {
         if (!stations || stations.length === 0) return { lat: 32.0553, lng: 34.7818 }; // תל אביב
-
-        // // ודא שיש קואורדינטות לכל התחנות
-        // const validStations = stations.filter(station =>
-        //     station.coordinates &&
-        //     station.coordinates.lat &&
-        //     station.coordinates.lng
-        // );
-
-        // if (validStations.length === 0) {
-        //     return { lat: 32.0553, lng: 34.7818 }; // תל אביב
-        // }
-
-        // const avgLat = validStations.reduce((sum, station) => sum + station.coordinates.lat, 0) / validStations.length;
-        // const avgLng = validStations.reduce((sum, station) => sum + station.coordinates.lng, 0) / validStations.length;
-
-        // return { lat: avgLat, lng: avgLng };
     }, [stations]);
 
 
@@ -523,7 +470,13 @@ export default function ShowRoutes() {
                     avoidHighways: false,
                     avoidTolls: false,
                     unitSystem: window.google.maps.UnitSystem.METRIC,
-                    region: 'IL'
+                    region: 'IL',
+                    avoidFerries: true,
+                    drivingOptions: {
+                        departureTime: new Date(),
+                        trafficModel: 'bestguess'
+                    }
+
                 }, (result, status) => {
                     console.log('תוצאת Google Directions:', status);
                     if (status === 'OK') {
@@ -616,26 +569,56 @@ export default function ShowRoutes() {
     }, [vehicleId, loadVehicleRoutes]);
 
     // פונקציה לעדכון זמן תחנה
+    // עדכון פונקציה לעדכון זמן תחנה
     const updateStationTime = (stationId, newTime) => {
         setStations(prev =>
             prev.map(station =>
-                station.id === stationId
-                    ? { ...station, time: newTime }
+                station.stationId === stationId
+                    ? {
+                        ...station,
+                        ...(station.isPickup
+                            ? { timeWindowStart: newTime }
+                            : { timeWindowEnd: newTime }
+                        )
+                    }
                     : station
             )
         );
     };
+    // פונקציה למיזוג תחנות זהות וספירת נוסעים
+    const mergeIdenticalStations = useCallback((stations) => {
+        const stationMap = new Map();
 
-    // פונקציה לשינוי סוג תחנה
-    const updateStationType = (stationId, newType) => {
-        setStations(prev =>
-            prev.map(station =>
-                station.id === stationId
-                    ? { ...station, type: newType }
-                    : station
-            )
-        );
-    };
+        stations.forEach(station => {
+            const key = `${station.address}_${station.isPickup}`;
+
+            if (stationMap.has(key)) {
+                // תחנה כבר קיימת - הוסף את הנוסע לרשימה
+                const existingStation = stationMap.get(key);
+                existingStation.passengerCount = (existingStation.passengerCount || 1) + 1;
+                existingStation.travelRequestIds = [...(existingStation.travelRequestIds || [existingStation.travelRequestsId]), station.travelRequestsId];
+            } else {
+                // תחנה חדשה
+                stationMap.set(key, {
+                    ...station,
+                    passengerCount: 1,
+                    travelRequestIds: [station.travelRequestsId]
+                });
+            }
+        });
+
+        return Array.from(stationMap.values()).sort((a, b) => a.order - b.order);
+    }, []);
+    // // פונקציה לשינוי סוג תחנה
+    // const updateStationType = (stationId, newType) => {
+    //     setStations(prev =>
+    //         prev.map(station =>
+    //             station.id === stationId
+    //                 ? { ...station, type: newType }
+    //                 : station
+    //         )
+    //     );
+    // };
 
     // פונקציה לחישוב מסלול מחדש ידנית
     const recalculateRoute = () => {
@@ -793,30 +776,30 @@ export default function ShowRoutes() {
                                                             <h5 className="card-title mb-2">
                                                                 🚌 {route.name || `מסלול ${index + 1}`}
                                                             </h5>
-                                                            <div className="row">
+                                                            {/* <div className="row">
                                                                 <div className="col-sm-6">
                                                                     <small className="text-muted">
                                                                         📍 תחנות: {route.stationsCount || 'לא ידוע'}
                                                                     </small>
                                                                 </div>
-                                                            </div>
-                                                            <div className="row mt-1">
+                                                            </div> */}
+                                                            {/* <div className="row mt-1">
                                                                 <div className="col-sm-6">
                                                                     <small className="text-muted">
                                                                         🚗 רכב: {vehicleId}
                                                                     </small>
                                                                 </div>
-                                                            </div>
+                                                            </div> */}
                                                             {route.description && (
                                                                 <p className="card-text mt-2 text-muted">
                                                                     {route.description}
                                                                 </p>
                                                             )}
-                                                            <div className="mt-2">
+                                                            {/* <div className="mt-2">
                                                                 <small className="text-info">
                                                                     מזהה מסלול: {route.routeId}
                                                                 </small>
-                                                            </div>
+                                                            </div> */}
                                                         </div>
                                                         <div className="col-md-4 text-end">
                                                             <div className="d-grid gap-2">
@@ -948,16 +931,16 @@ export default function ShowRoutes() {
                                                 <input
                                                     type="time"
                                                     className="form-control form-control-sm"
-                                                    value={station.time}
+                                                    value={station.isPickup ? station.estimatedArrivalTime : station.estimatedDepartureTime}
                                                     onChange={(e) => updateStationTime(station.stationId, e.target.value)}
                                                     style={{ width: '120px' }}
                                                 />
                                             </div>
 
-                                            <div className="mt-2">
-                                                <small className="text-muted">
-                                                    📍 {station.coordinates.lat.toFixed(4)}, {station.coordinates.lng.toFixed(4)}
-                                                </small>
+                                            <div className="mt-1">
+                                                <span className="badge bg-info text-dark">
+                                                    👥 {station.passengerCount || 1} נוסע{(station.passengerCount || 1) > 1 ? 'ים' : ''}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>

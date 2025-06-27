@@ -73,15 +73,17 @@ export default function DriverRegistration() {
       // POST פעם ראשונה
       axios.post("http://localhost:5238/api/Driver", driverData)
         .then((response) => {
-          const newId = response.data.driverId || response.data.DriverId || response.data.id;
-          if (newId) {
-            setDriver((prev) => ({ ...prev, DriverId: newId }));
-            localStorage.setItem("driverId", newId);
-            localStorage.setItem("driverName", driverData.DriverName);
-            setIsDriverSaved(true);
-            setStep(2);
-          } else {
-            alert("שגיאה: לא התקבל מזהה נהג");
+          if (response.data !== '') {
+            const newId = response.data.driverId || response.data.DriverId || response.data.id;
+            if (newId) {
+              setDriver((prev) => ({ ...prev, DriverId: newId }));
+              localStorage.setItem("driverId", newId);
+              localStorage.setItem("driverName", driverData.DriverName);
+              setIsDriverSaved(true);
+              setStep(2);
+            } else {
+              alert("שגיאה: לא התקבל מזהה נהג");
+            }
           }
         })
         .catch((err) => {
@@ -151,6 +153,14 @@ export default function DriverRegistration() {
 
             <input
               className="login-input"
+              type="text"
+              placeholder="טלפון"
+              value={driver.DriverPhone}
+              onChange={(e) => setDriver({ ...driver, DriverPhone: e.target.value })}
+            />
+            {inputErrors.DriverPhone && <div className="error-text">{inputErrors.DriverPhone}</div>}
+            <input
+              className="login-input"
               type="email"
               placeholder="מייל"
               value={driver.DriverMail}
@@ -158,18 +168,9 @@ export default function DriverRegistration() {
             />
             {inputErrors.DriverMail && <div className="error-text">{inputErrors.DriverMail}</div>}
 
-            <input
-              className="login-input"
-              type="text"
-              placeholder="טלפון"
-              value={driver.DriverPhone}
-              onChange={(e) => setDriver({ ...driver, DriverPhone: e.target.value })}
-            />
-            {inputErrors.DriverPhone && <div className="error-text">{inputErrors.DriverPhone}</div>}
-
             <button className="login-button" onClick={handleNext}>הבא</button>
             <p className="register-text">
-               רשומים?{" "}
+              רשומים?{" "}
               <span className="register-link" onClick={() => navigate('/DriverLogin')}>להתחברות</span>
             </p>
           </>
